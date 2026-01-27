@@ -10,6 +10,7 @@ fonttools==4.61.1
 lxml==6.0.2
 openpyxl==3.1.5
 pillow==12.1.0
+psycopg2-binary==2.9.11
 pycparser==3.0
 pydyf==0.12.1
 pyphen==0.17.2
