@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block title %}Schichtplan Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1>📅 Schichtplan Dashboard</h1>
+            <p class="text-muted">Willkommen im Schichtplan-Management</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'schichtplan:erstellen' %}" class="btn btn-success">
+                ➕ Neuer Schichtplan
+            </a>
+            <a href="{% url 'schichtplan:mitarbeiter_uebersicht' %}" class="btn btn-info">
+                👥 Mitarbeiter
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistiken -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Aktive Pläne</h5>
+                    <h2>{{ aktive_plaene }}</h2>
+                    <small>Veröffentlicht</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Entwürfe</h5>
+                    <h2>{{ entwuerfe }}</h2>
+                    <small>In Bearbeitung</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Mitarbeiter</h5>
+                    <h2>{{ mitarbeiter_zugeordnet }}/{{ mitarbeiter_gesamt }}</h2>
+                    <small>Zugeordnet</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card" style="background: #1a4d2e; color: white;">
+                <div class="card-body">
+                    <h5 class="card-title">Gesamt</h5>
+                    <h2>{{ schichtplaene.count }}</h2>
+                    <small>Schichtpläne</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schichtpläne -->
+    <div class="card">
+        <div class="card-header" style="background: #1a4d2e; color: white;">
+            <h5 class="mb-0">📋 Alle Schichtpläne</h5>
+        </div>
+        <div class="card-body">
+            {% if schichtplaene %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Zeitraum</th>
+                                <th>Tage</th>
+                                <th>Schichten</th>
+                                <th>Status</th>
+                                <th>Erstellt</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for plan in schichtplaene %}
+                            <tr>
+                                <td>
+                                    <strong>{{ plan.name }}</strong>
+                                </td>
+                                <td>
+                                    {{ plan.start_datum|date:"d.m.Y" }} - {{ plan.ende_datum|date:"d.m.Y" }}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ plan.anzahl_tage }} Tage</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-primary">{{ plan.anzahl_schichten }} Schichten</span>
+                                </td>
+                                <td>
+                                    {% if plan.status == 'entwurf' %}
+                                        <span class="badge bg-warning">Entwurf</span>
+                                    {% elif plan.status == 'veroeffentlicht' %}
+                                        <span class="badge bg-success">Veröffentlicht</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ plan.get_status_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        {{ plan.erstellt_am|date:"d.m.Y" }}
+                                        {% if plan.erstellt_von %}
+                                            <br>von {{ plan.erstellt_von.get_full_name|default:plan.erstellt_von.username }}
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{% url 'schichtplan:detail' plan.pk %}" 
+                                           class="btn btn-outline-primary" 
+                                           title="Ansehen">
+                                            👁️
+                                        </a>
+                                        <a href="{% url 'schichtplan:excel_import' plan.pk %}" 
+                                           class="btn btn-outline-success" 
+                                           title="Excel importieren">
+                                            📥
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    <h5>📋 Noch keine Schichtpläne</h5>
+                    <p>Erstelle deinen ersten Schichtplan!</p>
+                    <a href="{% url 'schichtplan:erstellen' %}" class="btn btn-success">
+                        ➕ Jetzt erstellen
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

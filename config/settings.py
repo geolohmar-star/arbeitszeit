@@ -26,7 +26,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'arbeitszeit.apps.ArbeitszeitConfig',
+    'arbeitszeit',
+    'schichtplan',  
 ]
 
 MIDDLEWARE = [
@@ -45,7 +46,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],  # oder [BASE_DIR / 'templates']
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -112,6 +113,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # Login/Logout URLs
-LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/'  # Nach Login zum Dashboard
-LOGOUT_REDIRECT_URL = '/accounts/login/'  # Nach Logout zum Login
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'

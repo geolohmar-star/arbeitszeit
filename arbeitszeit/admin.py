@@ -1,5 +1,3 @@
-# arbeitszeit/admin.py - KORRIGIERTE VERSION
-
 from django.contrib import admin
 from .models import (
     Mitarbeiter, 
@@ -12,20 +10,45 @@ from .models import (
 
 @admin.register(Mitarbeiter)
 class MitarbeiterAdmin(admin.ModelAdmin):
-    list_display = ['personalnummer', 'vollname', 'abteilung', 'standort', 'rolle', 'aktiv']
-    list_filter = ['aktiv', 'standort', 'rolle', 'abteilung']
-    search_fields = ['personalnummer', 'vorname', 'nachname', 'abteilung']
+    list_display = [
+        'personalnummer', 
+        'vollname', 
+        'abteilung', 
+        'schichtplan_kennung',
+        'rolle', 
+        'aktiv'
+    ]
+    
+    list_filter = [
+        'aktiv', 
+        'rolle', 
+        'abteilung',
+        'kann_tagschicht',
+        'kann_nachtschicht',
+        'verfuegbarkeit',
+    ]
+    
+    search_fields = ['vorname', 'nachname', 'personalnummer', 'schichtplan_kennung']
     
     fieldsets = (
         ('Persönliche Daten', {
-            'fields': ('user', 'personalnummer', 'vorname', 'nachname')
+            'fields': ('user', 'vorname', 'nachname', 'personalnummer')  # ← email ENTFERNT!
         }),
-        ('Firmendaten', {
-            'fields': ('abteilung', 'standort', 'eintrittsdatum', 'aktiv')
+        ('Arbeitsplatz', {
+            'fields': ('abteilung', 'standort', 'rolle', 'aktiv')
         }),
-        ('Berechtigungen', {
-            'fields': ('rolle',),
-            'description': 'Rolle bestimmt Zugriff auf Verwaltungsfunktionen'
+        ('Schichtplan-Präferenzen', {
+            'fields': (
+                'schichtplan_kennung',
+                'kann_tagschicht',
+                'kann_nachtschicht',
+                'max_wochenenden_pro_monat',
+                'nachtschicht_nur_wochenende',
+                'nur_zusatzdienste_wochentags',
+                'verfuegbarkeit',
+                'schichtplan_einschraenkungen',
+            ),
+            'classes': ('collapse',)
         }),
     )
 

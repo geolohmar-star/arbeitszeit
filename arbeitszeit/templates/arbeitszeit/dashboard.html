@@ -315,7 +315,7 @@
     </style>
 </head>
 <body>
-    <!-- Header -->
+    <!-- Header / Navbar -->
     <div class="header">
         <div class="header-content">
             <div class="logo">⏰ Arbeitszeitverwaltung</div>
@@ -323,9 +323,14 @@
                 <a href="{% url 'arbeitszeit:dashboard' %}">Dashboard</a>
                 <a href="{% url 'arbeitszeit:vereinbarung_liste' %}">Vereinbarungen</a>
                 <a href="{% url 'arbeitszeit:zeiterfassung_uebersicht' %}">Zeiterfassung</a>
+                
                 {% if user.is_staff %}
-                    <a href="{% url 'arbeitszeit:admin_dashboard' %}">Admin</a>
+                    <a href="{% url 'schichtplan:dashboard' %}">Schichtplanung</a>
+                    <a href="{% url 'admin:index' %}" target="_blank">Admin</a>
                 {% endif %}
+                
+                <span style="color: rgba(255,255,255,0.8);">👤 {{ user.username }}</span>
+                
                 <form method="post" action="{% url 'logout' %}" style="display: inline;">
                     {% csrf_token %}
                     <button type="submit" style="background: none; border: none; color: white; font: inherit; cursor: pointer; padding: 0; font-weight: 500;">
@@ -353,6 +358,21 @@
             {% endfor %}
         {% endif %}
 
+        <!-- Schichtplanung Kachel für Schichtplaner -->
+        {% if user.mitarbeiter %}
+            {% if user.mitarbeiter.rolle == 'schichtplaner' %}
+                <div class="card" style="background: linear-gradient(135deg, #2d6a4f 0%, #1a4d2e 100%); color: white; margin-bottom: 2rem;">
+                    <div class="card-body" style="border: none;">
+                        <h3 style="color: white; margin-bottom: 0.5rem;">📅 Schichtplanung</h3>
+                        <p style="opacity: 0.9; margin-bottom: 1rem;">Verwalten Sie Schichtpläne und Mitarbeiter</p>
+                        <a href="{% url 'schichtplan:dashboard' %}" class="btn" style="background: white; color: var(--primary);">
+                            Zur Schichtplanung →
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+
         <!-- Statistics Cards -->
         <div class="stats-grid">
             <!-- Aktuelle Arbeitszeit -->
@@ -366,8 +386,13 @@
                         <div class="stat-value">{{ aktuelle_vereinbarung.wochenstunden }}h</div>
                         <div class="stat-label">Wochenstunden</div>
                     {% elif aktuelle_vereinbarung.arbeitszeit_typ == 'individuell' %}
-                        <div class="stat-value">Individuell</div>
-                        <div class="stat-label">Wochenverteilung</div>
+                        {% if aktuelle_vereinbarung.get_wochenstunden_summe %}
+                            <div class="stat-value">{{ aktuelle_vereinbarung.get_wochenstunden_summe }}</div>
+                            <div class="stat-label">pro Woche (individuell)</div>
+                        {% else %}
+                            <div class="stat-value">Individuell</div>
+                            <div class="stat-label">Wochenverteilung</div>
+                        {% endif %}
                     {% else %}
                         <div class="stat-value">{{ aktuelle_vereinbarung.get_antragsart_display }}</div>
                         <div class="stat-label">{{ aktuelle_vereinbarung.get_status_display }}</div>

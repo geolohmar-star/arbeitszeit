@@ -1,6 +1,7 @@
 """
 Django Views für Arbeitszeitverwaltung
 """
+from pydoc import doc
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -23,9 +24,25 @@ from .models import Mitarbeiter
 
 
 
+
+
 @login_required
 def dashboard(request):
-    """Dashboard mit Übersicht für Mitarbeiter"""
+    """Dashboard mit Routing für verschiedene Rollen"""
+    
+    # Prüfe Mitarbeiter-Rolle
+    if hasattr(request.user, 'mitarbeiter'):
+        rolle = request.user.mitarbeiter.rolle
+        
+        # Sachbearbeiter → Admin-Dashboard
+        if rolle == 'sachbearbeiter':
+            return redirect('arbeitszeit:admin_dashboard')
+        
+        # Schichtplaner → Schichtplan-Dashboard
+        if rolle == 'schichtplaner':
+            return redirect('schichtplan:dashboard')
+    
+    # Normale Mitarbeiter → Mitarbeiter-Dashboard
     # Mitarbeiter-Profil holen oder erstellen
     try:
         mitarbeiter = request.user.mitarbeiter
@@ -65,8 +82,9 @@ def dashboard(request):
         'letzte_erfassungen': letzte_erfassungen,
         'urlaubsanspruch': urlaubsanspruch,
         'alle_vereinbarungen': alle_vereinbarungen,
+        'user': request.user,
     }
-    
+       
     return render(request, 'arbeitszeit/dashboard.html', context)
 
 
@@ -470,29 +488,48 @@ def admin_vereinbarung_genehmigen(request, pk):
 @login_required
 def mitarbeiter_uebersicht(request):
     """Übersicht aller Mitarbeiter (nur für Vorgesetzte)"""
+    
+    # Berechtigung prüfen
     if not request.user.is_staff:
-        messages.error(request, "Sie haben keine Berechtigung für diese Seite.")
-        return redirect('arbeitszeit:dashboard')
+        # Prüfe ob Schichtplaner
+        if not (hasattr(request.user, 'mitarbeiter') and 
+                request.user.mitarbeiter.rolle == 'schichtplaner'):
+            messages.error(request, "Sie haben keine Berechtigung für diese Seite.")
+            return redirect('arbeitszeit:dashboard')
     
-    mitarbeiter_liste = Mitarbeiter.objects.filter(aktiv=True)
+    # Mitarbeiter filtern
+    if request.user.is_staff:
+        # Admins sehen alle Mitarbeiter
+        mitarbeiter_liste = Mitarbeiter.objects.filter(aktiv=True)
+    else:
+        # Schichtplaner sehen nur ihre eigene Abteilung
+        eigene_abteilung = request.user.mitarbeiter.abteilung
+        mitarbeiter_liste = Mitarbeiter.objects.filter(
+            aktiv=True,
+            abteilung=eigene_abteilung
+        )
     
-    # Filter nach Abteilung
+    # Filter nach Abteilung (für Admins)
     abteilung_filter = request.GET.get('abteilung')
-    if abteilung_filter:
+    if abteilung_filter and request.user.is_staff:
         mitarbeiter_liste = mitarbeiter_liste.filter(abteilung=abteilung_filter)
     
     # Filter nach Standort
     standort_filter = request.GET.get('standort')
     if standort_filter:
         mitarbeiter_liste = mitarbeiter_liste.filter(standort=standort_filter)
-    
+
     context = {
         'mitarbeiter_liste': mitarbeiter_liste,
+        'mitarbeiter': mitarbeiter_liste,  # ← Für Kompatibilität hinzufügen
         'abteilung_filter': abteilung_filter,
         'standort_filter': standort_filter,
+        'anzahl_siegburg': mitarbeiter_liste.filter(standort='siegburg').count(),  # ← NEU
+        'anzahl_bonn': mitarbeiter_liste.filter(standort='bonn').count(),  # ← NEU
     }
-    
+        
     return render(request, 'arbeitszeit/mitarbeiter_uebersicht.html', context)
+
 from django.contrib.auth import login
 from django.contrib.auth.models import User
 from .forms import RegisterForm
@@ -652,13 +689,12 @@ def admin_vereinbarung_docx_export(request, pk):
     # Wochensumme
     if vereinbarung.wochenstunden:
         wochensumme_text = f'{vereinbarung.wochenstunden} Stunden pro Woche'
-    elif hasattr(vereinbarung, 'get_wochenstunden_summe') and vereinbarung.get_wochenstunden_summe():
-        wochensumme_text = f'{vereinbarung.get_wochenstunden_summe()} pro Woche'
     else:
         wochensumme_text = 'Individuelle Wochenverteilung'
-    
+
     doc.add_paragraph(wochensumme_text)
-    
+
+        
     # Gültigkeit
     gueltig_bis = vereinbarung.gueltig_bis.strftime('%d.%m.%Y') if vereinbarung.gueltig_bis else 'unbefristet'
     doc.add_paragraph(f'Gültig: {vereinbarung.gueltig_ab.strftime("%d.%m.%Y")} bis {gueltig_bis}')
@@ -713,10 +749,10 @@ def admin_vereinbarung_docx_export(request, pk):
             row_cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
         
         # Summen-Zeile (falls vorhanden)
-        if hasattr(vereinbarung, 'get_wochenstunden_summe') and vereinbarung.get_wochenstunden_summe():
+        if hasattr(vereinbarung, 'get_wochenstunden_summe') and vereinbarung.get_wochenstunden_summe:
             row_cells = table.add_row().cells
             row_cells[0].text = 'Summe pro Woche'
-            row_cells[1].text = vereinbarung.get_wochenstunden_summe()
+            row_cells[1].text = vereinbarung.get_wochenstunden_summe
             
             # Formatierung: fett und hellgrüner Hintergrund
             for cell in row_cells:
@@ -944,8 +980,8 @@ def admin_vereinbarung_pdf_export(request, pk):
             ])
         
         # Summe berechnen
-        if hasattr(vereinbarung, 'get_wochenstunden_summe') and vereinbarung.get_wochenstunden_summe():
-            wochen_data.append(['Summe pro Woche', vereinbarung.get_wochenstunden_summe()])
+        if hasattr(vereinbarung, 'get_wochenstunden_summe') and vereinbarung.get_wochenstunden_summe:
+            wochen_data.append(['Summe pro Woche', vereinbarung.get_wochenstunden_summe])
         
         wochen_table = Table(wochen_data, colWidths=[7.5*cm, 7.5*cm])
         wochen_table.setStyle(TableStyle([
@@ -1015,3 +1051,45 @@ def admin_vereinbarung_pdf_export(request, pk):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     return response
+@login_required
+def mitarbeiter_detail(request, pk):
+    """Detail/Bearbeiten eines Mitarbeiters"""
+    mitarbeiter = get_object_or_404(Mitarbeiter, pk=pk)
+    
+    # Berechtigung prüfen
+    if not (request.user.is_staff or 
+            (hasattr(request.user, 'mitarbeiter') and 
+             request.user.mitarbeiter.rolle == 'schichtplaner')):
+        messages.error(request, "Keine Berechtigung.")
+        return redirect('arbeitszeit:dashboard')
+    
+    if request.method == 'POST':
+        # Basis
+        mitarbeiter.schichtplan_kennung = request.POST.get('schichtplan_kennung', '')
+        mitarbeiter.kann_tagschicht = 'kann_tagschicht' in request.POST
+        mitarbeiter.kann_nachtschicht = 'kann_nachtschicht' in request.POST
+        
+        # NEU: Wochenenden
+        try:
+            mitarbeiter.max_wochenenden_pro_monat = int(request.POST.get('max_wochenenden_pro_monat', 4))
+        except ValueError:
+            mitarbeiter.max_wochenenden_pro_monat = 4
+        
+        # NEU: Spezielle Regeln
+        mitarbeiter.nachtschicht_nur_wochenende = 'nachtschicht_nur_wochenende' in request.POST
+        mitarbeiter.nur_zusatzdienste_wochentags = 'nur_zusatzdienste_wochentags' in request.POST
+        
+        # NEU: Verfügbarkeit
+        mitarbeiter.verfuegbarkeit = request.POST.get('verfuegbarkeit', 'voll')
+        
+        # NEU: Freitext
+        mitarbeiter.schichtplan_einschraenkungen = request.POST.get('schichtplan_einschraenkungen', '')
+        
+        mitarbeiter.save()
+        
+        messages.success(request, f"✅ {mitarbeiter.vollname} aktualisiert!")
+        return redirect('schichtplan:mitarbeiter_uebersicht')
+    
+    return render(request, 'arbeitszeit/mitarbeiter_detail.html', {
+        'mitarbeiter': mitarbeiter
+    })

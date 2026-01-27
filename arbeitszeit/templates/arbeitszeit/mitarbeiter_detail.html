@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}{{ mitarbeiter.vollname }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1>👤 {{ mitarbeiter.vollname }}</h1>
+            <p class="text-muted">Mitarbeiter bearbeiten</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'schichtplan:mitarbeiter_uebersicht' %}" 
+               class="btn btn-secondary">
+                ← Zurück zur Übersicht
+            </a>
+        </div>
+    </div>
+
+    <!-- Persönliche Daten -->
+    <div class="card mb-3">
+        <div class="card-header" style="background: #1a4d2e; color: white;">
+            <h5 class="mb-0">📋 Persönliche Daten</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Vorname:</strong> {{ mitarbeiter.vorname }}</p>
+                    <p><strong>Nachname:</strong> {{ mitarbeiter.nachname }}</p>
+                    <p><strong>Personalnummer:</strong> {{ mitarbeiter.personalnummer }}</p>
+                    <p><strong>Email:</strong> {{ mitarbeiter.email }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Abteilung:</strong> {{ mitarbeiter.abteilung }}</p>
+                    <p><strong>Standort:</strong> {{ mitarbeiter.standort }}</p>
+                    <p><strong>Rolle:</strong> 
+                        <span class="badge bg-primary">{{ mitarbeiter.get_rolle_display }}</span>
+                    </p>
+                    <p><strong>Status:</strong> 
+                        {% if mitarbeiter.aktiv %}
+                            <span class="badge bg-success">Aktiv</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Inaktiv</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Schichtplan-Präferenzen -->
+    <div class="card">
+    <div class="card-header" style="background: #1a4d2e; color: white;">
+        <h5 class="mb-0">📅 Schichtplan-Präferenzen</h5>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            {% csrf_token %}
+            
+            <!-- Kennung -->
+            <div class="mb-4">
+                <label class="form-label">
+                    <strong>Schichtplan-Kennung</strong>
+                </label>
+                <input type="text" 
+                       class="form-control" 
+                       name="schichtplan_kennung" 
+                       value="{{ mitarbeiter.schichtplan_kennung|default:'' }}"
+                       placeholder="z.B. MA1, MA2, MA3..."
+                       maxlength="10">
+                <small class="text-muted">
+                    💡 Für Excel-Import: Spalte 3 = MA1, Spalte 4 = MA2, etc.
+                </small>
+            </div>
+
+            <hr>
+
+            <!-- Basis-Verfügbarkeit -->
+            <div class="mb-4">
+                <label class="form-label">
+                    <strong>Basis-Verfügbarkeit</strong>
+                </label>
+                
+                <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="kann_tagschicht" 
+                           id="kann_tagschicht"
+                           {% if mitarbeiter.kann_tagschicht %}checked{% endif %}>
+                    <label class="form-check-label" for="kann_tagschicht">
+                        ☀️ Kann Tagschichten arbeiten (T)
+                    </label>
+                </div>
+                
+                <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="kann_nachtschicht" 
+                           id="kann_nachtschicht"
+                           {% if mitarbeiter.kann_nachtschicht %}checked{% endif %}>
+                    <label class="form-check-label" for="kann_nachtschicht">
+                        🌙 Kann Nachtschichten arbeiten (N)
+                    </label>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- NEU: Wochenend-Einschränkungen -->
+            <div class="mb-4">
+                <label class="form-label">
+                    <strong>🗓️ Wochenend-Einschränkungen</strong>
+                </label>
+                
+                <div class="mb-3">
+                    <label for="max_wochenenden" class="form-label">
+                        Max. Wochenenden pro Monat
+                    </label>
+                    <input type="number" 
+                           class="form-control" 
+                           id="max_wochenenden"
+                           name="max_wochenenden_pro_monat" 
+                           value="{{ mitarbeiter.max_wochenenden_pro_monat|default:4 }}"
+                           min="0"
+                           max="5"
+                           style="max-width: 100px;">
+                    <small class="text-muted">
+                        0 = keine Wochenenden, 4 = alle möglich
+                    </small>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- NEU: Spezielle Schicht-Regeln -->
+            <div class="mb-4">
+                <label class="form-label">
+                    <strong>🎯 Spezielle Schicht-Regeln</strong>
+                </label>
+                
+                <div class="form-check">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="nachtschicht_nur_wochenende" 
+                           id="nachtschicht_nur_wochenende"
+                           {% if mitarbeiter.nachtschicht_nur_wochenende %}checked{% endif %}>
+                    <label class="form-check-label" for="nachtschicht_nur_wochenende">
+                        🌙 Nachtschichten nur am Wochenende (Fr/Sa/So)
+                    </label>
+                    <small class="form-text text-muted d-block">
+                        Nachtdienste nur Freitag, Samstag oder Sonntag möglich
+                    </small>
+                </div>
+                
+                <div class="form-check mt-3">
+                    <input class="form-check-input" 
+                           type="checkbox" 
+                           name="nur_zusatzdienste_wochentags" 
+                           id="nur_zusatzdienste_wochentags"
+                           {% if mitarbeiter.nur_zusatzdienste_wochentags %}checked{% endif %}>
+                    <label class="form-check-label" for="nur_zusatzdienste_wochentags">
+                        📋 In der Woche nur Zusatzdienste (Z)
+                    </label>
+                    <small class="form-text text-muted d-block">
+                        Montag bis Donnerstag nur Zusatzarbeiten, keine regulären Schichten
+                    </small>
+                </div>
+            </div>
+
+            <hr>
+
+            <!-- NEU: Verfügbarkeit (Dropdown) -->
+            <div class="mb-4">
+                <label class="form-label">
+                    <strong>📊 Allgemeine Verfügbarkeit</strong>
+                </label>
+                <select class="form-select" name="verfuegbarkeit">
+                    <option value="voll" {% if mitarbeiter.verfuegbarkeit == 'voll' %}selected{% endif %}>
+                        Vollzeit - alle Schichten
+                    </option>
+                    <option value="teilzeit" {% if mitarbeiter.verfuegbarkeit == 'teilzeit' %}selected{% endif %}>
+                        Teilzeit - begrenzte Schichten
+                    </option>
+                    <option value="wochenende_only" {% if mitarbeiter.verfuegbarkeit == 'wochenende_only' %}selected{% endif %}>
+                        Nur Wochenende (Fr/Sa/So)
+                    </option>
+                    <option value="wochentags_only" {% if mitarbeiter.verfuegbarkeit == 'wochentags_only' %}selected{% endif %}>
+                        Nur Wochentags (Mo-Do)
+                    </option>
+                    <option value="dauerkrank" {% if mitarbeiter.verfuegbarkeit == 'dauerkrank' %}selected{% endif %}>
+                        Dauerkrank - nicht einplanbar
+                    </option>
+                </select>
+            </div>
+
+            <hr>
+
+            <!-- NEU: Freitext -->
+            <div class="mb-4">
+                <label class="form-label">
+                    <strong>📝 Weitere Einschränkungen / Besonderheiten</strong>
+                </label>
+                <textarea class="form-control" 
+                          name="schichtplan_einschraenkungen" 
+                          rows="4"
+                          placeholder="z.B. 'Kann keine aufeinanderfolgenden Nachtschichten', 'Medizinische Einschränkung: max. 3 Schichten/Woche', 'Bevorzugt Spätdienst', etc.">{{ mitarbeiter.schichtplan_einschraenkungen|default:'' }}</textarea>
+                <small class="text-muted">
+                    Hier können spezielle Wünsche, medizinische Gründe oder andere Besonderheiten eingetragen werden
+                </small>
+            </div>
+
+            <!-- Hinweise -->
+            <div class="alert alert-info">
+                <strong>ℹ️ Hinweise:</strong>
+                <ul class="mb-0">
+                    <li>Die Kennung muss zur Excel-Spalte passen (MA1-MA15)</li>
+                    <li>Einschränkungen werden beim automatischen Planen berücksichtigt</li>
+                    <li>Freitext-Einschränkungen müssen manuell beachtet werden</li>
+                </ul>
+            </div>
+
+            <!-- Buttons -->
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                <a href="{% url 'schichtplan:mitarbeiter_uebersicht' %}" 
+                   class="btn btn-secondary">
+                    Abbrechen
+                </a>
+                <button type="submit" class="btn btn-success">
+                    💾 Speichern
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

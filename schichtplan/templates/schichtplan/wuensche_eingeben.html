@@ -1,0 +1,377 @@
+{% extends "base.html" %}
+
+{% block title %}Schichtwünsche - {{ periode.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.wunsch-kalender {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.kalender-tag {
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 10px;
+    min-height: 120px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.kalender-tag:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.kalender-tag.wochenende {
+    background: #f8f9fa;
+}
+
+.kalender-tag.heute {
+    border-color: #0d6efd;
+    border-width: 3px;
+}
+
+.tag-datum {
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-bottom: 5px;
+}
+
+.tag-wochentag {
+    font-size: 0.8em;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.wunsch-auswahl {
+    display: none;
+}
+
+.kalender-tag.aktiv .wunsch-auswahl {
+    display: block;
+}
+
+.wunsch-button {
+    width: 100%;
+    margin: 3px 0;
+    padding: 8px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: all 0.2s;
+}
+
+.wunsch-button:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+}
+
+.wunsch-urlaub { background: #dc3545; color: white; }
+.wunsch-kein-tag { background: #0d6efd; color: white; }
+.wunsch-keine-nacht { background: #ffc107; color: black; }
+.wunsch-tag-bevorzugt { background: #198754; color: white; }
+.wunsch-nacht-bevorzugt { background: #6f42c1; color: white; }
+.wunsch-gar-nichts { background: #212529; color: white; }
+.wunsch-zusatz { background: #fd7e14; color: white; }
+
+.wunsch-anzeige {
+    padding: 8px;
+    border-radius: 5px;
+    text-align: center;
+    font-size: 0.85em;
+    font-weight: bold;
+}
+
+.legende {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin: 20px 0;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.legende-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.legende-farbe {
+    width: 30px;
+    height: 30px;
+    border-radius: 5px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1>📝 Schichtwünsche eingeben</h1>
+            <h3>{{ periode.name }}</h3>
+            <p class="text-muted">
+                Zeitraum: {{ periode.fuer_monat|date:"F Y" }}<br>
+                Eingabe möglich bis: <strong>{{ periode.eingabe_ende|date:"d.m.Y H:i" }} Uhr</strong>
+            </p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'schichtplan:dashboard' %}" class="btn btn-secondary">
+                ← Zurück
+            </a>
+        </div>
+    </div>
+
+    <!-- Legende -->
+    <div class="card mb-4">
+        <div class="card-header" style="background: #1a4d2e; color: white;">
+            <h5 class="mb-0">🎨 Wunsch-Kategorien</h5>
+        </div>
+        <div class="card-body">
+            <div class="legende">
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-urlaub"></div>
+                    <span><strong>1 - Urlaub</strong> (muss genehmigt werden)</span>
+                </div>
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-kein-tag"></div>
+                    <span><strong>2 - Kein Tag, aber Nacht</strong></span>
+                </div>
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-keine-nacht"></div>
+                    <span><strong>3 - Keine Nacht, aber Tag</strong></span>
+                </div>
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-tag-bevorzugt"></div>
+                    <span><strong>4 - Tag bevorzugt</strong></span>
+                </div>
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-nacht-bevorzugt"></div>
+                    <span><strong>5 - Nacht bevorzugt</strong></span>
+                </div>
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-gar-nichts"></div>
+                    <span><strong>6 - Gar nichts möglich</strong> (Arzt, etc.)</span>
+                </div>
+                <div class="legende-item">
+                    <div class="legende-farbe wunsch-zusatz"></div>
+                    <span><strong>7 - Zusatzarbeit</strong> (möchte arbeiten)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anleitung -->
+    <div class="alert alert-info">
+        <strong>💡 So funktioniert's:</strong>
+        <ol class="mb-0">
+            <li>Klicke auf einen Tag im Kalender</li>
+            <li>Wähle deine Wunsch-Kategorie (1-7)</li>
+            <li>Optional: Trage eine Begründung ein</li>
+            <li>Klicke "Speichern" wenn fertig</li>
+        </ol>
+    </div>
+
+    <!-- Kalender -->
+    <form method="post" id="wunschForm">
+        {% csrf_token %}
+        
+        <div class="wunsch-kalender">
+            {% for tag in kalender_tage %}
+            <div class="kalender-tag {% if tag.ist_wochenende %}wochenende{% endif %} {% if tag.ist_heute %}heute{% endif %}"
+                 data-datum="{{ tag.datum|date:'Y-m-d' }}"
+                 onclick="toggleTag(this)">
+                
+                <div class="tag-datum">{{ tag.datum|date:"d" }}</div>
+                <div class="tag-wochentag">{{ tag.wochentag }}</div>
+                
+                {% if tag.wunsch %}
+                    <!-- Bestehender Wunsch -->
+                    <div class="wunsch-anzeige" style="background: {{ tag.wunsch.farbe }}; color: white;">
+                        {{ tag.wunsch.get_wunsch_display }}
+                        {% if tag.wunsch.benoetigt_genehmigung %}
+                            {% if tag.wunsch.genehmigt %}
+                                ✅
+                            {% else %}
+                                ⏳
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                {% else %}
+                    <div class="wunsch-anzeige" style="background: #e9ecef; color: #6c757d;">
+                        Kein Wunsch
+                    </div>
+                {% endif %}
+                
+                <!-- Auswahl (erscheint bei Klick) -->
+                <div class="wunsch-auswahl mt-2">
+                    <button type="button" class="wunsch-button wunsch-urlaub"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'urlaub', this)">
+                        1 - Urlaub
+                    </button>
+                    <button type="button" class="wunsch-button wunsch-kein-tag"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'kein_tag_aber_nacht', this)">
+                        2 - Kein Tag
+                    </button>
+                    <button type="button" class="wunsch-button wunsch-keine-nacht"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'keine_nacht_aber_tag', this)">
+                        3 - Keine Nacht
+                    </button>
+                    <button type="button" class="wunsch-button wunsch-tag-bevorzugt"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'tag_bevorzugt', this)">
+                        4 - Tag
+                    </button>
+                    <button type="button" class="wunsch-button wunsch-nacht-bevorzugt"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'nacht_bevorzugt', this)">
+                        5 - Nacht
+                    </button>
+                    <button type="button" class="wunsch-button wunsch-gar-nichts"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'gar_nichts', this)">
+                        6 - Gar nichts
+                    </button>
+                    <button type="button" class="wunsch-button wunsch-zusatz"
+                            onclick="setzeWunsch('{{ tag.datum|date:'Y-m-d' }}', 'zusatzarbeit', this)">
+                        7 - Zusatz
+                    </button>
+                    <button type="button" class="btn btn-sm btn-secondary mt-2 w-100"
+                            onclick="loescheWunsch('{{ tag.datum|date:'Y-m-d' }}')">
+                        ✕ Löschen
+                    </button>
+                </div>
+                
+                <input type="hidden" name="wunsch_{{ tag.datum|date:'Y-m-d' }}" 
+                       id="wunsch_{{ tag.datum|date:'Y-m-d' }}"
+                       value="{{ tag.wunsch.wunsch|default:'' }}">
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Speichern -->
+        <div class="mt-4 text-center">
+            <button type="submit" class="btn btn-success btn-lg">
+                💾 Alle Wünsche speichern
+            </button>
+        </div>
+    </form>
+
+    <!-- Statistik -->
+    <div class="card mt-4">
+        <div class="card-body">
+            <h5>📊 Deine Wünsche:</h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <strong>Urlaub:</strong> <span id="stat-urlaub">0</span> Tage
+                </div>
+                <div class="col-md-3">
+                    <strong>Einschränkungen:</strong> <span id="stat-einschraenkungen">0</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Präferenzen:</strong> <span id="stat-praeferenzen">0</span>
+                </div>
+                <div class="col-md-3">
+                    <strong>Gesamt:</strong> <span id="stat-gesamt">0</span> / {{ kalender_tage|length }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let aktuellerTag = null;
+
+function toggleTag(element) {
+    // Alle anderen schließen
+    document.querySelectorAll('.kalender-tag').forEach(tag => {
+        if (tag !== element) {
+            tag.classList.remove('aktiv');
+        }
+    });
+    
+    // Diesen öffnen/schließen
+    element.classList.toggle('aktiv');
+    aktuellerTag = element.classList.contains('aktiv') ? element : null;
+}
+
+function setzeWunsch(datum, wunschTyp, button) {
+    const input = document.getElementById('wunsch_' + datum);
+    input.value = wunschTyp;
+    
+    // Visuelle Rückmeldung
+    const tag = document.querySelector(`[data-datum="${datum}"]`);
+    const anzeige = tag.querySelector('.wunsch-anzeige');
+    
+    const wunschTexte = {
+        'urlaub': '1 - Urlaub',
+        'kein_tag_aber_nacht': '2 - Kein Tag',
+        'keine_nacht_aber_tag': '3 - Keine Nacht',
+        'tag_bevorzugt': '4 - Tag',
+        'nacht_bevorzugt': '5 - Nacht',
+        'gar_nichts': '6 - Gar nichts',
+        'zusatzarbeit': '7 - Zusatz',
+    };
+    
+    anzeige.textContent = wunschTexte[wunschTyp];
+    anzeige.style.background = window.getComputedStyle(button).backgroundColor;
+    anzeige.style.color = 'white';
+    
+    // Tag schließen
+    tag.classList.remove('aktiv');
+    
+    // Statistik aktualisieren
+    aktualisiereStatistik();
+}
+
+function loescheWunsch(datum) {
+    const input = document.getElementById('wunsch_' + datum);
+    input.value = '';
+    
+    const tag = document.querySelector(`[data-datum="${datum}"]`);
+    const anzeige = tag.querySelector('.wunsch-anzeige');
+    anzeige.textContent = 'Kein Wunsch';
+    anzeige.style.background = '#e9ecef';
+    anzeige.style.color = '#6c757d';
+    
+    tag.classList.remove('aktiv');
+    aktualisiereStatistik();
+}
+
+function aktualisiereStatistik() {
+    let urlaub = 0, einschraenkungen = 0, praeferenzen = 0, gesamt = 0;
+    
+    document.querySelectorAll('[name^="wunsch_"]').forEach(input => {
+        if (input.value) {
+            gesamt++;
+            if (input.value === 'urlaub') urlaub++;
+            else if (['kein_tag_aber_nacht', 'keine_nacht_aber_tag', 'gar_nichts'].includes(input.value)) 
+                einschraenkungen++;
+            else praeferenzen++;
+        }
+    });
+    
+    document.getElementById('stat-urlaub').textContent = urlaub;
+    document.getElementById('stat-einschraenkungen').textContent = einschraenkungen;
+    document.getElementById('stat-praeferenzen').textContent = praeferenzen;
+    document.getElementById('stat-gesamt').textContent = gesamt;
+}
+
+// Initial laden
+document.addEventListener('DOMContentLoaded', aktualisiereStatistik);
+
+// Klick außerhalb schließt
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('.kalender-tag')) {
+        document.querySelectorAll('.kalender-tag').forEach(tag => {
+            tag.classList.remove('aktiv');
+        });
+    }
+});
+</script>
+{% endblock %}

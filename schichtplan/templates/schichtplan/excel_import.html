@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}Excel importieren - {{ schichtplan.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <!-- Header -->
+            <div class="mb-4">
+                <h1>📥 Excel-Import</h1>
+                <p class="text-muted">
+                    Für Schichtplan: <strong>{{ schichtplan.name }}</strong>
+                </p>
+            </div>
+
+            <!-- Upload-Formular -->
+            <div class="card">
+                <div class="card-header" style="background: #1a4d2e; color: white;">
+                    <h5 class="mb-0">Excel-Datei hochladen</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Excel-Datei auswählen</label>
+                            {{ form.excel_file }}
+                            {% if form.excel_file.errors %}
+                                <div class="alert alert-danger mt-2">
+                                    {{ form.excel_file.errors }}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">
+                                Nur .xlsx oder .xls Dateien, max. 5MB
+                            </small>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'schichtplan:detail' schichtplan.pk %}" 
+                               class="btn btn-secondary">
+                                Abbrechen
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                📥 Jetzt importieren
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Hinweise -->
+            <div class="alert alert-info mt-4">
+                <h6>ℹ️ Wichtige Hinweise:</h6>
+                <ul class="mb-0">
+                    <li>Excel-Datei muss das richtige Format haben (wie Februar.xlsx)</li>
+                    <li>Mitarbeiter müssen <strong>MA1-MA15</strong> zugeordnet sein</li>
+                    <li>Nur Schichten <strong>T</strong> (Tag) und <strong>N</strong> (Nacht) werden importiert</li>
+                    <li>U, Z, Z8 etc. werden ignoriert</li>
+                    <li>Spalte 3+ im Excel = MA1, MA2, MA3, ...</li>
+                </ul>
+            </div>
+
+            <!-- Mitarbeiter-Zuordnung Status -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">👥 Mitarbeiter-Zuordnung prüfen</h6>
+                </div>
+                <div class="card-body">
+                    {% if mitarbeiter_zugeordnet %}
+                        <p class="text-success">
+                            ✅ <strong>{{ mitarbeiter_zugeordnet.count }} Mitarbeiter</strong> sind zugeordnet
+                        </p>
+                        <div class="row">
+                            {% for ma in mitarbeiter_zugeordnet|slice:":15" %}
+                                <div class="col-md-4 mb-2">
+                                    <small>
+                                        <span class="badge bg-success">{{ ma.schichtplan_kennung }}</span>
+                                        {{ ma.nachname }}
+                                    </small>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning mb-0">
+                            <strong>⚠️ Noch keine Mitarbeiter zugeordnet!</strong>
+                            <p class="mb-0">
+                                Du musst zuerst Mitarbeiter MA1-MA15 zuordnen.
+                                <a href="{% url 'schichtplan:mitarbeiter_uebersicht' %}" class="alert-link">
+                                    → Jetzt zuordnen
+                                </a>
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Beispiel-Struktur -->
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h6 class="mb-0">📊 Erwartete Excel-Struktur</h6>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3">
+| Datum | Tag | MA1 | MA2 | MA3 | ... | MA15 |
+|-------|-----|-----|-----|-----|-----|------|
+| 1     | So  |     |     |     | N   |      |
+| 2     | Mo  |     | N   |     |     |      |
+| 3     | Di  |     |     | T   |     | N    |
+...
+                    </pre>
+                    <small class="text-muted">
+                        Spalte 1 = Datum (Tag im Monat)<br>
+                        Spalte 2 = Wochentag<br>
+                        Spalte 3+ = Mitarbeiter (MA1, MA2, ...)<br>
+                        Zellen = T (Tag), N (Nacht), oder leer
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

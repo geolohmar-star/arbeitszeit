@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Mitarbeiter-Übersicht{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1>👥 Mitarbeiter-Übersicht</h1>
+            <p class="text-muted">Schichtplan-Präferenzen verwalten</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'schichtplan:dashboard' %}" class="btn btn-secondary">
+                ← Zurück
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistiken -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5>Gesamt</h5>
+                    <h2>{{ stats.gesamt }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5>Zugeordnet</h5>
+                    <h2>{{ stats.zugeordnet }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark">
+                <div class="card-body">
+                    <h5>Nicht zugeordnet</h5>
+                    <h2>{{ stats.nicht_zugeordnet }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <h5>Dauerkrank</h5>
+                    <h2>{{ stats.dauerkrank }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mitarbeiter-Liste -->
+    <div class="card">
+        <div class="card-header" style="background: #1a4d2e; color: white;">
+            <h5 class="mb-0">Mitarbeiter ({{ mitarbeiter.count }})</h5>
+        </div>
+        <div class="card-body">
+            {% if mitarbeiter %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>MA#</th>
+                                <th>Name</th>
+                                <th>Pers.-Nr.</th>
+                                <th>Abteilung</th>
+                                <th>Status</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ma in mitarbeiter %}
+                            <tr>
+                                <td>
+                                    {% if ma.schichtplan_kennung %}
+                                        <span class="badge bg-success">{{ ma.schichtplan_kennung }}</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">Keine</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ ma.nachname }}, {{ ma.vorname }}</strong>
+                                </td>
+                                <td>{{ ma.personalnummer }}</td>
+                                <td>{{ ma.abteilung }}</td>
+                                <td>
+                                    {% if ma.aktiv %}
+                                        <span class="badge bg-success">Aktiv</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inaktiv</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'arbeitszeit:mitarbeiter_detail' ma.pk %}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        Bearbeiten
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    Keine Mitarbeiter gefunden.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Anleitung -->
+    <div class="alert alert-info mt-4">
+        <h6>💡 Mitarbeiter zuordnen:</h6>
+        <ol class="mb-0">
+            <li>Klicke bei einem Mitarbeiter auf "Bearbeiten"</li>
+            <li>Scrolle zu "Schichtplan-Präferenzen"</li>
+            <li>Trage Kennung ein: <code>MA1</code>, <code>MA2</code>, etc.</li>
+            <li>Speichern</li>
+        </ol>
+        <p class="mt-2 mb-0">
+            <strong>Wichtig:</strong> Die Kennung muss zur Excel-Spalte passen!<br>
+            Spalte 3 = MA1, Spalte 4 = MA2, usw.
+        </p>
+    </div>
+</div>
+{% endblock %}

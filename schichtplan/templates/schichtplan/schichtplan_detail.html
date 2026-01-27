@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}{{ schichtplan.name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1>📅 {{ schichtplan.name }}</h1>
+            <p class="text-muted">
+                {{ schichtplan.start_datum|date:"d.m.Y" }} - {{ schichtplan.ende_datum|date:"d.m.Y" }}
+                ({{ schichtplan.anzahl_tage }} Tage)
+            </p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'schichtplan:dashboard' %}" class="btn btn-secondary">
+                ← Zurück
+            </a>
+            <a href="{% url 'schichtplan:excel_import' schichtplan.pk %}" class="btn btn-success">
+                📥 Excel importieren
+            </a>
+        </div>
+    </div>
+
+    <!-- Status und Info -->
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h5>📊 Übersicht</h5>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Status:</strong><br>
+                            {% if schichtplan.status == 'entwurf' %}
+                                <span class="badge bg-warning">Entwurf</span>
+                            {% elif schichtplan.status == 'veroeffentlicht' %}
+                                <span class="badge bg-success">Veröffentlicht</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ schichtplan.get_status_display }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Schichten:</strong><br>
+                            <span class="badge bg-primary">{{ schichtplan.anzahl_schichten }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Tage:</strong><br>
+                            <span class="badge bg-info">{{ schichtplan.anzahl_tage }}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Erstellt:</strong><br>
+                            {{ schichtplan.erstellt_am|date:"d.m.Y" }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5>🎨 Legende</h5>
+                    {% for schichttyp in schichttypen %}
+                        <span class="badge me-2 mb-2" style="background-color: {{ schichttyp.farbe }};">
+                            {{ schichttyp.kuerzel }} - {{ schichttyp.name }}
+                        </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Kalender -->
+    <div class="card">
+        <div class="card-header" style="background: #1a4d2e; color: white;">
+            <h5 class="mb-0">📆 Schichtkalender</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm">
+                    <thead>
+                        <tr>
+                            <th width="100">Datum</th>
+                            <th width="80">Wochentag</th>
+                            <th>Schichten</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for datum, daten in kalender_daten.items %}
+                        <tr {% if daten.ist_wochenende %}class="table-secondary"{% endif %}>
+                            <td>
+                                <strong>{{ daten.datum|date:"d.m.Y" }}</strong>
+                            </td>
+                            <td>
+                                {{ daten.wochentag }}
+                                {% if daten.ist_wochenende %}
+                                    <span class="badge bg-info">WE</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if daten.schichten %}
+                                    <div class="d-flex flex-wrap gap-2">
+                                        {% for schicht in daten.schichten %}
+                                            <div class="badge me-2" 
+                                                 style="background-color: {{ schicht.schichttyp.farbe }};"
+                                                 title="{{ schicht.mitarbeiter.vollname }} - {{ schicht.schichttyp.name }}">
+                                                <strong>{{ schicht.schichttyp.kuerzel }}</strong>: 
+                                                {{ schicht.mitarbeiter.schichtplan_kennung|default:schicht.mitarbeiter.nachname }}
+                                                <a href="{% url 'schichtplan:schicht_loeschen' schicht.pk %}" 
+                                                   class="text-white ms-1"
+                                                   onclick="return confirm('Schicht wirklich löschen?');">
+                                                    ✕
+                                                </a>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <span class="text-muted">Keine Schichten</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mitarbeiter-Statistik -->
+    {% if mitarbeiter_stats %}
+    <div class="card mt-4">
+        <div class="card-header" style="background: #1a4d2e; color: white;">
+            <h5 class="mb-0">👥 Mitarbeiter-Übersicht</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Mitarbeiter</th>
+                            <th>Kennung</th>
+                            <th>Schichten</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ma in mitarbeiter_stats %}
+                        <tr>
+                            <td>{{ ma.vollname }}</td>
+                            <td>{{ ma.schichtplan_kennung|default:"-" }}</td>
+                            <td>
+                                <span class="badge bg-primary">{{ ma.anzahl_schichten }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

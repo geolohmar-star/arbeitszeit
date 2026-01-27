@@ -6,39 +6,192 @@ from django.db.models import Q
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 class Mitarbeiter(models.Model):
-    """Mitarbeiter-Stammdaten"""
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='mitarbeiter')
-    personalnummer = models.CharField(max_length=20, unique=True)
-    nachname = models.CharField(max_length=100)
-    vorname = models.CharField(max_length=100)
-    abteilung = models.CharField(max_length=100)
     
+
+    # === CHOICES ZUERST ===
     STANDORT_CHOICES = [
         ('siegburg', 'Siegburg'),
         ('bonn', 'Bonn'),
     ]
-    standort = models.CharField(max_length=20, choices=STANDORT_CHOICES)
-    
-    eintrittsdatum = models.DateField()
-    aktiv = models.BooleanField(default=True)
 
-    
-    # NEU: Rolle hinzufügen
     ROLLE_CHOICES = [
-        ('mitarbeiter', 'Mitarbeiter'),
-        ('sachbearbeiter', 'Sachbearbeiter'),
+    ('mitarbeiter', 'Mitarbeiter'),
+    ('sachbearbeiter', 'Sachbearbeiter'),
+    ('schichtplaner', 'Schichtplaner'),  
     ]
-    rolle = models.CharField(
-        max_length=20, 
-        choices=ROLLE_CHOICES, 
-        default='mitarbeiter',
-        verbose_name='Rolle'
+
+    ARBEITSZEIT_TYP_CHOICES = [
+        ('typ_a', 'Typ A - 7:48h'),
+        ('typ_b', 'Typ B - 8:12h'),
+        ('typ_c', 'Typ C - 8:00h'),
+        ('individuell', 'Individuell'),
+    ]
+
+    VERFUEGBARKEIT_CHOICES = [
+        ('voll', 'Vollzeit - alle Schichten'),
+        ('teilzeit', 'Teilzeit - begrenzte Schichten'),
+        ('dauerkrank', 'Dauerkrank - nicht einplanbar'),
+        ('nur_wochenende', 'Nur Wochenende (Fr/Sa/So)'),
+        ('keine_wochenende', 'Keine Wochenenden'),
+    ]
+
+    PRIORITAET_CHOICES = [
+        ('niedrig', 'Niedrig - Flexibel einsetzbar'),
+        ('normal', 'Normal'),
+        ('hoch', 'Hoch - Präferenzen bevorzugt berücksichtigen'),
+    ]
+   
+    # === BASISDATEN ===
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+
+    personalnummer = models.CharField(max_length=20, unique=True)
+    vorname = models.CharField(max_length=100)
+    nachname = models.CharField(max_length=100)
+    abteilung = models.CharField(max_length=100)
+
+    standort = models.CharField(
+        max_length=20,
+        choices=STANDORT_CHOICES
     )
+
+    rolle = models.CharField(
+        max_length=20,
+        choices=ROLLE_CHOICES,
+        default='mitarbeiter'
+    )
+    eintrittsdatum = models.DateField(null=True, blank=True)
+    aktiv = models.BooleanField(default=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # === SCHICHTPLAN-PRÄFERENZEN ===
+    
+    # Zuordnung für Excel-Import
+    schichtplan_kennung = models.CharField(
+        max_length=10,
+        blank=True,
+        default='',
+        help_text="z.B. 'MA1', 'MA2' für Excel-Import"
+    )
+    
+    kann_tagschicht = models.BooleanField(
+        default=True,
+        verbose_name="Kann Tagschichten arbeiten"
+    )
+    
+    kann_nachtschicht = models.BooleanField(
+        default=True,
+        verbose_name="Kann Nachtschichten arbeiten"
+    )
+    
+    # NEU: Wochenend-Einschränkungen
+    max_wochenenden_pro_monat = models.IntegerField(
+        default=4,
+        verbose_name="Max. Wochenenden pro Monat",
+        help_text="0 = keine Wochenenden, 4 = alle möglich"
+    )
+    
+    # NEU: Nachtschicht nur am Wochenende
+    nachtschicht_nur_wochenende = models.BooleanField(
+        default=False,
+        verbose_name="Nachtschicht nur Fr/Sa/So",
+        help_text="Wenn aktiv: Nachtschichten nur Freitag, Samstag, Sonntag"
+    )
+    
+    # NEU: Nur Zusatzdienste in der Woche
+    nur_zusatzdienste_wochentags = models.BooleanField(
+        default=False,
+        verbose_name="In der Woche nur Zusatzdienste (Z)",
+        help_text="Mo-Do nur Zusatzarbeiten, keine regulären Schichten"
+    )
+    
+    # NEU: Freitext für spezielle Wünsche
+    schichtplan_einschraenkungen = models.TextField(
+        blank=True,
+        verbose_name="Weitere Einschränkungen / Besonderheiten",
+        help_text="Freitext für spezielle Wünsche, medizinische Gründe, etc."
+    )
+    
+    # Optional: Verfügbarkeit (für später)
+    VERFUEGBARKEIT_CHOICES = [
+        ('voll', 'Vollzeit - alle Schichten'),
+        ('teilzeit', 'Teilzeit - begrenzte Schichten'),
+        ('wochenende_only', 'Nur Wochenende (Fr/Sa/So)'),
+        ('wochentags_only', 'Nur Wochentags (Mo-Do)'),
+        ('dauerkrank', 'Dauerkrank - nicht einplanbar'),
+    ]
+    
+    verfuegbarkeit = models.CharField(
+        max_length=20,
+        choices=VERFUEGBARKEIT_CHOICES,
+        default='voll',
+        blank=True,
+        verbose_name="Verfügbarkeit"
+    )
+    
+   
+    arbeitszeit_typ = models.CharField(
+        max_length=20,
+        choices=ARBEITSZEIT_TYP_CHOICES,
+        default='typ_c',
+        blank=True
+    )
+    
+    # Schichtfähigkeiten
+    kann_tagschicht = models.BooleanField(default=True)
+    kann_nachtschicht = models.BooleanField(default=True)
+    nur_zusatzarbeiten = models.BooleanField(
+        default=False,
+        help_text="Nur für Zusatzarbeiten verfügbar (12h)"
+    )
+    
+    # Wochenend-Einschränkungen
+    max_wochenenden_pro_monat = models.IntegerField(
+        default=4,
+        help_text="Maximal X Wochenenden pro Monat"
+    )
+    
+    
+    verfuegbarkeit = models.CharField(
+        max_length=20,
+        choices=VERFUEGBARKEIT_CHOICES,
+        default='voll'
+    )
+    
+    # Nachtschicht-Einschränkungen
+    nachtschicht_nur_wochenende = models.BooleanField(
+        default=False,
+        help_text="Nachtschichten nur Fr/Sa/So"
+    )
+    
+    # Maximale Schichten
+    max_schichten_pro_monat = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Begrenzt für Teilzeit"
+    )
+    
+    max_aufeinanderfolgende_tage = models.IntegerField(
+        default=5,
+        help_text="Max. Arbeitstage in Folge"
+    )
+    
+    # Bemerkungen für Planer
+    schichtplan_bemerkungen = models.TextField(
+        blank=True,
+        help_text="Besondere Hinweise für Schichtplaner"
+    )
+    
+    
+    planungs_prioritaet = models.CharField(
+        max_length=10,
+        choices=PRIORITAET_CHOICES,
+        default='normal',
+        blank=True
+    )
     
     class Meta:
         verbose_name = "Mitarbeiter"
@@ -141,7 +294,31 @@ class Arbeitszeitvereinbarung(models.Model):
         ordering = ['-gueltig_ab']
     
     def __str__(self):
-        return f"{self.mitarbeiter.vollname} - {self.get_antragsart_display()} ab {self.gueltig_ab}"
+        return f"{self.mitarbeiter.vollname} - {self.get_antragsart_display()} ({self.gueltig_ab})"
+    
+    @property
+    def get_wochenstunden_summe(self):
+    
+    # Regelmäßige Arbeitszeit
+        if self.arbeitszeit_typ == 'regelmaessig' and self.wochenstunden:
+            stunden = int(self.wochenstunden)
+            minuten = int((self.wochenstunden - stunden) * 60)
+            return f"{stunden}:{minuten:02d}h"
+
+    # Individuelle Verteilung
+        if self.arbeitszeit_typ == 'individuell':
+            tage = self.tagesarbeitszeiten.all()
+            if not tage.exists():
+                return None
+
+            total_minuten = sum(
+                (t.stunden * 60 + t.minuten) for t in tage
+            )
+            stunden = total_minuten // 60
+            minuten = total_minuten % 60
+            return f"{stunden}:{minuten:02d}h"
+
+        return None
     
     @property
     def ist_aktiv(self):
@@ -165,17 +342,6 @@ class Arbeitszeitvereinbarung(models.Model):
             return f"{stunden}:{minuten:02d}h"
         return None
     
-    def get_wochenstunden_summe(self):
-        """Berechnet die Gesamtwochenstunden aus individueller Verteilung"""
-        if self.arbeitszeit_typ == 'individuell':
-            tage = self.tagesarbeitszeiten.all()
-            total_minuten = sum(
-                (t.stunden * 60 + t.minuten) for t in tage
-            )
-            stunden = total_minuten // 60
-            minuten = total_minuten % 60
-            return f"{stunden}:{minuten:02d}h"
-        return None
 
 
 class Tagesarbeitszeit(models.Model):
@@ -352,3 +518,12 @@ class Zeiterfassung(models.Model):
             minuten = self.arbeitszeit_minuten % 60
             return f"{stunden}:{minuten:02d}h"
         return "0:00h"
+    def clean(self):
+        stunden = self.zeitwert // 100
+        minuten = self.zeitwert % 100
+
+        if minuten >= 60:
+            raise ValidationError("Minuten dürfen nicht ≥ 60 sein")
+
+        if stunden < 0 or stunden > 24:
+            raise ValidationError("Ungültige Stundenzahl")
