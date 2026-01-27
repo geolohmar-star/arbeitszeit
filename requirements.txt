@@ -7,8 +7,10 @@ dj-database-url==3.1.0
 Django==6.0.1
 et_xmlfile==2.0.0
 fonttools==4.61.1
+gunicorn==24.1.1
 lxml==6.0.2
 openpyxl==3.1.5
+packaging==26.0
 pillow==12.1.0
 psycopg2-binary==2.9.11
 pycparser==3.0
@@ -23,4 +25,5 @@ typing_extensions==4.15.0
 tzdata==2025.3
 weasyprint==68.0
 webencodings==0.5.1
+whitenoise==6.11.0
 zopfli==0.4.0
