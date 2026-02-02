@@ -357,6 +357,30 @@
             {% endif %}
             <p class="page-subtitle">{{ mitarbeiter.abteilung }} • {{ mitarbeiter.get_standort_display }}</p>
         </div>
+        <!-- Wunschplan für MA1-MA15 -->
+        {% if mitarbeiter.schichtplan_kennung %}
+            {% with kennung=mitarbeiter.schichtplan_kennung %}
+                {% if kennung == 'MA1' or kennung == 'MA2' or kennung == 'MA3' or kennung == 'MA4' or kennung == 'MA5' or kennung == 'MA6' or kennung == 'MA7' or kennung == 'MA8' or kennung == 'MA9' or kennung == 'MA10' or kennung == 'MA11' or kennung == 'MA12' or kennung == 'MA13' or kennung == 'MA14' or kennung == 'MA15' %}
+                <div class="card mb-4" style="border: 2px solid #0d6efd;">
+                    <div class="card-header" style="background: #0d6efd; color: white;">
+                        <h5 class="mb-0">🗓️ Schichtwünsche</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3">
+                            Hier können Sie Ihre Wünsche für kommende Schichtpläne eintragen.
+                            <br>
+                            <small class="text-muted">
+                                ✅ Transparenz: Alle Kollegen (MA1-MA15) sehen Ihre Wünsche
+                            </small>
+                        </p>
+                        <a href="{% url 'schichtplan:wunschperioden_liste' %}" class="btn btn-primary">
+                            📝 Zu meinen Wünschen
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            {% endwith %}
+        {% endif %}
 
         <!-- Messages -->
         {% if messages %}

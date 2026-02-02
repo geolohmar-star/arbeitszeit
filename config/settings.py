@@ -45,8 +45,11 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
+        # Hier fügen wir den Pfad hinzu, damit Django ihn garantiert findet:
+        'DIRS': [
+            BASE_DIR / 'schichtplan' / 'templates',
+        ],
+        'APP_DIRS': True,  # Das sorgt dafür, dass 'arbeitszeit/templates' weiterhin geht
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
