@@ -346,6 +346,15 @@
         <!-- Page Header -->
         <div class="page-header">
             <h1 class="page-title">Willkommen, {{ mitarbeiter.vorname }}!</h1>
+            {% if mitarbeiter.rolle == 'schichtplaner' %}
+            <div class="alert alert-info mb-4">
+                <h5>🗓️ Schichtplaner-Funktionen</h5>
+                <p>Sie haben Zugriff auf die Schichtplan-Verwaltung.</p>
+                <a href="{% url 'schichtplan:dashboard' %}" class="btn btn-primary">
+                    📊 Zum Schichtplan-Dashboard
+                </a>
+            </div>
+            {% endif %}
             <p class="page-subtitle">{{ mitarbeiter.abteilung }} • {{ mitarbeiter.get_standort_display }}</p>
         </div>
 

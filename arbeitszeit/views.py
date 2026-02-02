@@ -592,12 +592,13 @@ def vereinbarung_detail(request, pk):
 @login_required
 def dashboard(request):
     user = request.user
+    
+    # Nur Sachbearbeiter werden direkt weitergeleitet
     if hasattr(user, 'mitarbeiter'):
         rolle = user.mitarbeiter.rolle
         if rolle == 'sachbearbeiter':
             return redirect('arbeitszeit:admin_dashboard')
-        if rolle == 'schichtplaner':
-            return redirect('schichtplan:dashboard')
+        # Schichtplaner NICHT mehr redirecten!
     
     mitarbeiter, created = Mitarbeiter.objects.get_or_create(
         user=user,
