@@ -161,6 +161,8 @@ class MitarbeiterAdmin(admin.ModelAdmin):
                 'max_schichten_pro_monat',
                 'max_aufeinanderfolgende_tage',
                 'planungs_prioritaet',
+                'erlaubte_wochentage',      # ← NEU
+                'keine_zusatzdienste',      # ← NEU
             )
         }),
         ('Bemerkungen', {
