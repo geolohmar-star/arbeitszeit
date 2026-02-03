@@ -21,7 +21,7 @@ from calendar import day_name
 import tempfile
 
 # Models
-from arbeitszeit.models import Mitarbeiter
+from arbeitszeit.models import Mitarbeiter, MonatlicheArbeitszeitSoll
 from .models import Schichtplan, Schicht, Schichttyp, SchichtwunschPeriode, Schichtwunsch  # ← Schichtwunsch hinzufügen!
 
 
@@ -194,12 +194,9 @@ class SchichtplanCreateView(CreateView):
             return self.form_invalid(form)
 
     def _generate_with_ai(self):
-        """
-        KI-Generierung mit gefilterter Mitarbeiter-Liste (MA1-MA15).
-        Berücksichtigt alle Präferenzen und eingereichten Schichtwünsche.
-        """
+      
         print(f"🤖 KI-Generierung für Plan '{self.object.name}' (ID={self.object.pk}) gestartet...")
-
+        
         # 1. BASIS-CHECK: Mitarbeiter vorhanden?
         planbare_mitarbeiter = get_planbare_mitarbeiter()
         
@@ -209,7 +206,7 @@ class SchichtplanCreateView(CreateView):
                 "⚠️ Keine planbaren Mitarbeiter gefunden (MA1-MA15 aktiv/nicht dauerkrank)."
             )
             return
-
+        
         # 2. BASIS-CHECK: Schichttypen vorhanden?
         required_types = ['T', 'N']
         existing_types = list(Schichttyp.objects.filter(kuerzel__in=required_types).values_list('kuerzel', flat=True))
@@ -217,25 +214,16 @@ class SchichtplanCreateView(CreateView):
         if len(existing_types) != len(required_types):
             missing = set(required_types) - set(existing_types)
             raise Exception(f"Schichttypen fehlen: {', '.join(missing)}. Bitte im Admin anlegen.")
-
-        # 3. DATEN SAMMELN: Wünsche aus der Periode laden (falls verknüpft)
-        wuensche_liste = []
-        if self.object.wunschperiode:
-            wuensche_liste = Schichtwunsch.objects.filter(
-                periode=self.object.wunschperiode,
-                mitarbeiter__in=planbare_mitarbeiter
-            ).select_related('mitarbeiter')
-            print(f"   ✓ {wuensche_liste.count()} Wünsche aus Periode '{self.object.wunschperiode.name}' geladen.")
-        else:
-            print("   ℹ️ Keine Wunschperiode verknüpft. Generierung erfolgt nur nach Stammdaten-Präferenzen.")
-
+        
+        # 3. HINWEIS: Wünsche werden automatisch vom Generator geladen
+        print(f"   ℹ️ Wünsche werden automatisch aus DB geladen (falls vorhanden)")
+        
         # 4. GENERATOR STARTEN (Genau ein Aufruf)
         try:
-            # Wir übergeben dem Generator die Mitarbeiter UND die (optionale) Wunschliste
-            generator = SchichtplanGenerator(
-                mitarbeiter_liste=planbare_mitarbeiter, 
-                wuensche=wuensche_liste
-            )
+            # WICHTIG: Nur ein Positionsargument!
+            # Alte Schichten löschen (falls Plan neu generiert wird)
+            Schicht.objects.filter(schichtplan=self.object).delete()
+            generator = SchichtplanGenerator(planbare_mitarbeiter)
             
             generator.generiere_vorschlag(self.object)
             
@@ -248,7 +236,7 @@ class SchichtplanCreateView(CreateView):
                 f"Mitarbeiter automatisch generiert."
             )
             print(f"✅ Erfolg: {schichten_anzahl} Schichten generiert.")
-
+            
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -397,27 +385,25 @@ def mitarbeiter_uebersicht(request):
 
 @login_required
 def schichtplan_detail(request, pk):
-    """Detail-Ansicht eines Schichtplans"""
+    """Detail-Ansicht eines Schichtplans mit erweiterter Statistik"""
     schichtplan = get_object_or_404(Schichtplan, pk=pk)
 
     if not ist_schichtplaner(request.user):
         messages.error(request, "❌ Keine Berechtigung.")
         return redirect('arbeitszeit:dashboard')
 
-    # Alle Schichten des Plans
+    # 1. Alle Schichten laden
     schichten = schichtplan.schichten.select_related(
         'mitarbeiter', 'schichttyp'
     ).order_by('datum', 'schichttyp__start_zeit')
 
-    # Mitarbeiter-Zuordnung (Mapping von schichtplan_kennung zu vollname)
+    # 2. Kalender-Daten vorbereiten
     mitarbeiter_mapping = {ma.schichtplan_kennung: ma.vollname for ma in Mitarbeiter.objects.all()}
-
     kalender_daten = {}
     current_date = schichtplan.start_datum
 
-    # Bereite die Kalender-Daten vor
     while current_date <= schichtplan.ende_datum:
-        tag_schichten = schichten.filter(datum=current_date)
+        tag_schichten = [s for s in schichten if s.datum == current_date]
         kalender_daten[current_date] = {
             'datum': current_date,
             'wochentag': day_name[current_date.weekday()],
@@ -426,24 +412,82 @@ def schichtplan_detail(request, pk):
         }
         current_date += timedelta(days=1)
 
-    # Mitarbeiter-Statistik
-    mitarbeiter_stats = Mitarbeiter.objects.filter(
-        schichten__schichtplan=schichtplan
-    ).annotate(
-        anzahl_schichten=Count('schichten')
-    ).order_by('-anzahl_schichten')
+    # 3. STATISTIK BERECHNEN (KORRIGIERT)
+    # ---------------------------------------------------------
+    stats_list = []
+    
+    # WICHTIG: Wir holen ALLE relevanten Mitarbeiter, nicht nur die mit Schichten!
+    alle_mitarbeiter = get_planbare_mitarbeiter() # Nutzt deine Helper-Funktion oben
+    
+    # Debug
+    print(f"DEBUG: Berechne Statistik für {alle_mitarbeiter.count()} Mitarbeiter...")
+    
+    # Fallback-Stunden
+    stunden_defaults = {'T': 12.25, 'N': 12.25, 'Z': 8.0}
 
-    # Übergib das Mapping zu den Mitarbeiternamen an das Template
+    for ma in alle_mitarbeiter:
+        # Schichten dieses Mitarbeiters aus der geladenen Liste filtern
+        ma_schichten = [s for s in schichten if s.mitarbeiter_id == ma.id]
+        
+        c_t = 0
+        c_n = 0
+        c_z = 0
+        ist_stunden = 0.0
+        wochenenden_set = set()
+        
+        for s in ma_schichten:
+            kuerzel = s.schichttyp.kuerzel
+            
+            if kuerzel == 'T': c_t += 1
+            elif kuerzel == 'N': c_n += 1
+            elif kuerzel == 'Z': c_z += 1
+            
+            # Stunden summieren
+            stunden = float(s.schichttyp.arbeitszeit_stunden) if s.schichttyp.arbeitszeit_stunden else stunden_defaults.get(kuerzel, 0)
+            ist_stunden += stunden
+            
+            # Wochenende
+            if s.datum.weekday() >= 5:
+                iso_year, iso_week, _ = s.datum.isocalendar()
+                wochenenden_set.add(f"{iso_year}-{iso_week}")
+
+        # --- SOLL-STUNDEN via Model-Methode ---
+        try:
+            # Nutzt deine Methode im Model
+            soll_stunden = float(ma.get_soll_stunden_monat(
+                schichtplan.start_datum.year, 
+                schichtplan.start_datum.month
+            ))
+        except Exception as e:
+            print(f"   ⚠️ Fehler Soll-Stunden {ma.schichtplan_kennung}: {e}")
+            soll_stunden = 160.0 # Fallback
+
+        prozent = (ist_stunden / soll_stunden * 100) if soll_stunden > 0 else 0
+        
+        stats_list.append({
+            'ma': ma,
+            't': c_t,
+            'n': c_n,
+            'z': c_z,
+            'we': len(wochenenden_set),
+            'ist_stunden': ist_stunden,
+            'soll_stunden': soll_stunden,
+            'diff': ist_stunden - soll_stunden,
+            'prozent': prozent
+        })
+
+    # Sortieren nach Kennung (MA1, MA2...)
+    stats_list.sort(key=lambda x: (len(x['ma'].schichtplan_kennung or ''), x['ma'].schichtplan_kennung or ''))
+
     context = {
         'schichtplan': schichtplan,
         'kalender_daten': kalender_daten,
-        'mitarbeiter_stats': mitarbeiter_stats,
+        'mitarbeiter_stats': stats_list, # Das muss gefüllt sein!
         'schichttypen': Schichttyp.objects.filter(aktiv=True),
-        'mitarbeiter_mapping': mitarbeiter_mapping,  # Das Mapping hier hinzufügen
+        'mitarbeiter_mapping': mitarbeiter_mapping,
     }
 
     return render(request, 'schichtplan/schichtplan_detail.html', context)
-
 
 
 @login_required

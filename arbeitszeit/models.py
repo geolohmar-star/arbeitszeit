@@ -1,6 +1,7 @@
 """
 Django Models für Arbeitszeitverwaltung
 """
+from unicodedata import decimal
 from django.db import models
 from django.db.models import Q
 from django.contrib.auth.models import User
@@ -12,6 +13,8 @@ from django.core.exceptions import ValidationError
 from decimal import Decimal
 import calendar
 from workalendar.europe import NorthRhineWestphalia
+
+
 
 #WorkCalendar
 class MonatlicheArbeitszeitSoll(models.Model):
@@ -448,31 +451,17 @@ class Mitarbeiter(models.Model):
     )
     
     # Schichtfähigkeiten
-    kann_tagschicht = models.BooleanField(default=True)
-    kann_nachtschicht = models.BooleanField(default=True)
+    
     nur_zusatzarbeiten = models.BooleanField(
         default=False,
         help_text="Nur für Zusatzarbeiten verfügbar (12h)"
     )
     
-    # Wochenend-Einschränkungen
-    max_wochenenden_pro_monat = models.IntegerField(
-        default=4,
-        help_text="Maximal X Wochenenden pro Monat"
-    )
     
     
-    verfuegbarkeit = models.CharField(
-        max_length=20,
-        choices=VERFUEGBARKEIT_CHOICES,
-        default='voll'
-    )
     
-    # Nachtschicht-Einschränkungen
-    nachtschicht_nur_wochenende = models.BooleanField(
-        default=False,
-        help_text="Nachtschichten nur Fr/Sa/So"
-    )
+    
+    
     
     # Maximale Schichten
     max_schichten_pro_monat = models.IntegerField(
@@ -492,14 +481,31 @@ class Mitarbeiter(models.Model):
         help_text="Besondere Hinweise für Schichtplaner"
     )
     
-    
+
     planungs_prioritaet = models.CharField(
         max_length=10,
         choices=PRIORITAET_CHOICES,
         default='normal',
         blank=True
     )
-    
+
+    # NEU: Erlaubte Arbeitstage (individuelle Vereinbarung)
+    # Null = alle Tage erlaubt
+    erlaubte_wochentage = models.JSONField(
+        null=True,
+        blank=True,
+        verbose_name="Erlaubte Arbeitstage",
+        help_text="Nur bestimmte Tage: [0]=Mo, [1]=Di, [2]=Mi, [3]=Do, [4]=Fr, [5]=Sa, [6]=So. Leer = alle Tage erlaubt."
+    )
+
+    # NEU: Keine Zusatzdienste
+    keine_zusatzdienste = models.BooleanField(
+        default=False,
+        verbose_name="Keine Zusatzdienste",
+        help_text="Wenn aktiv: MA wird NICHT in Zusatzdienste eingeteilt"
+    )
+
+       
     class Meta:
         verbose_name = "Mitarbeiter"
         verbose_name_plural = "Mitarbeiter"
@@ -513,28 +519,7 @@ class Mitarbeiter(models.Model):
         return f"{self.vorname} {self.nachname}"
     
     
-    def get_aktuelle_vereinbarung(self, stichtag=None):
-        """
-        Holt die zum Stichtag gültige Arbeitszeitvereinbarung.
-        
-        Args:
-            stichtag (date): Optional, Standard ist heute
-        
-        Returns:
-            Arbeitszeitvereinbarung oder None
-        """
-        from django.utils import timezone
-        from django.db.models import Q
-        
-        if stichtag is None:
-            stichtag = timezone.now().date()
-        
-        return self.arbeitszeitvereinbarungen.filter(
-            status__in=['aktiv', 'genehmigt'],
-            gueltig_ab__lte=stichtag
-        ).filter(
-            Q(gueltig_bis__isnull=True) | Q(gueltig_bis__gte=stichtag)
-        ).order_by('-gueltig_ab').first()
+    
 
 class Arbeitszeitvereinbarung(models.Model):
     """Arbeitszeitvereinbarung für einen Mitarbeiter"""
@@ -893,9 +878,7 @@ def berechne_und_speichere(cls, mitarbeiter, jahr, monat):
     Berechnet die Soll-Stunden für einen Mitarbeiter und Monat.
     Verwendet die tatsächliche Arbeitszeitvereinbarung!
     """
-    from decimal import Decimal
-    import calendar
-    from workalendar.europe import NorthRhineWestphalia
+  
     
     # 1. Hole Wochenstunden aus Vereinbarung
     # Stichtag = Mitte des Monats (für den Fall dass sich was ändert)
